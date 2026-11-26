@@ -6,19 +6,23 @@ import java.util.List;
 import java.util.PriorityQueue;
 
 /**
- * Priority queue of patients: highest triage priority first, then earliest arrival.
+ * Priority queue of patients: lowest priority rank first (HIGH before LOW),
+ * then earliest arrival within the same priority.
  */
 public class PatientQueue {
 
     private static final Comparator<Patient> ORDER =
-            Comparator.comparingInt((Patient p) -> p.getPriority().getLevel())
-                      .thenComparingInt(Patient::getId);
+            Comparator.comparingInt((Patient p) -> p.getPriority().getRank())
+                      .thenComparingLong(Patient::getArrivalOrder);
 
     private final PriorityQueue<Patient> queue = new PriorityQueue<>(ORDER);
-    private int nextId = 1;
 
-    public Patient admit(String name, int age, String condition, Priority priority) {
-        Patient patient = new Patient(nextId++, name, age, condition, priority);
+    /** Incremented for every admission; gives each patient a unique id and arrival order. */
+    private long arrivalCounter = 0;
+
+    public Patient admit(String name, Priority priority) {
+        long order = ++arrivalCounter;
+        Patient patient = new Patient(String.format("P%03d", order), name, priority, order);
         queue.add(patient);
         return patient;
     }

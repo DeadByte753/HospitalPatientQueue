@@ -6,21 +6,25 @@ import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
-import javax.swing.JSpinner;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
-import javax.swing.SpinnerNumberModel;
 import javax.swing.table.AbstractTableModel;
+import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
@@ -30,6 +34,7 @@ import java.util.List;
 public class QueueFrame extends JFrame {
 
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final int PRIORITY_COLUMN = 3;
 
     private final PatientQueue queue;
     private final QueueTableModel tableModel = new QueueTableModel();
@@ -37,8 +42,6 @@ public class QueueFrame extends JFrame {
     private final JTable table = new JTable(tableModel);
 
     private final JTextField nameField = new JTextField(16);
-    private final JSpinner ageSpinner = new JSpinner(new SpinnerNumberModel(30, 0, 130, 1));
-    private final JTextField conditionField = new JTextField(16);
     private final JComboBox<Priority> priorityBox = new JComboBox<>(Priority.values());
     private final JLabel statusLabel = new JLabel();
 
@@ -56,10 +59,10 @@ public class QueueFrame extends JFrame {
         statusLabel.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
         add(statusLabel, BorderLayout.SOUTH);
 
-        priorityBox.setSelectedItem(Priority.STANDARD);
+        priorityBox.setSelectedItem(Priority.MEDIUM);
         refresh();
 
-        setSize(980, 480);
+        setSize(900, 440);
         setLocationRelativeTo(null);
     }
 
@@ -73,30 +76,28 @@ public class QueueFrame extends JFrame {
         c.fill = GridBagConstraints.HORIZONTAL;
 
         addRow(panel, c, 0, "Name:", nameField);
-        addRow(panel, c, 1, "Age:", ageSpinner);
-        addRow(panel, c, 2, "Condition:", conditionField);
-        addRow(panel, c, 3, "Priority:", priorityBox);
+        addRow(panel, c, 1, "Priority:", priorityBox);
 
         JButton admitButton = new JButton("Admit");
         admitButton.addActionListener(e -> admitPatient());
         getRootPane().setDefaultButton(admitButton);
 
         c.gridx = 0;
-        c.gridy = 4;
+        c.gridy = 2;
         c.gridwidth = 2;
         c.fill = GridBagConstraints.NONE;
         c.anchor = GridBagConstraints.EAST;
         panel.add(admitButton, c);
 
         // Push content to the top.
-        c.gridy = 5;
+        c.gridy = 3;
         c.weighty = 1;
         panel.add(new JPanel(), c);
 
         return panel;
     }
 
-    private static void addRow(JPanel panel, GridBagConstraints c, int row, String label, java.awt.Component field) {
+    private static void addRow(JPanel panel, GridBagConstraints c, int row, String label, Component field) {
         c.gridx = 0;
         c.gridy = row;
         c.gridwidth = 1;
@@ -114,6 +115,7 @@ public class QueueFrame extends JFrame {
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.setFillsViewportHeight(true);
         table.getTableHeader().setReorderingAllowed(false);
+        table.getColumnModel().getColumn(PRIORITY_COLUMN).setCellRenderer(new PriorityRenderer());
         panel.add(new JScrollPane(table), BorderLayout.CENTER);
 
         JButton callNextButton = new JButton("Call Next Patient");
@@ -134,29 +136,25 @@ public class QueueFrame extends JFrame {
     private JPanel buildServedPanel() {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBorder(BorderFactory.createTitledBorder("Called"));
-        JScrollPane scroll = new JScrollPane(new javax.swing.JList<>(servedModel));
-        scroll.setPreferredSize(new java.awt.Dimension(220, 0));
+        JScrollPane scroll = new JScrollPane(new JList<>(servedModel));
+        scroll.setPreferredSize(new Dimension(220, 0));
         panel.add(scroll, BorderLayout.CENTER);
         return panel;
     }
 
     private void admitPatient() {
         String name = nameField.getText().trim();
-        String condition = conditionField.getText().trim();
         if (name.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Please enter the patient's name.",
                     "Missing information", JOptionPane.WARNING_MESSAGE);
             nameField.requestFocusInWindow();
             return;
         }
-        int age = (Integer) ageSpinner.getValue();
         Priority priority = (Priority) priorityBox.getSelectedItem();
-
-        queue.admit(name, age, condition.isEmpty() ? "-" : condition, priority);
+        queue.admit(name, priority);
 
         nameField.setText("");
-        conditionField.setText("");
-        priorityBox.setSelectedItem(Priority.STANDARD);
+        priorityBox.setSelectedItem(Priority.MEDIUM);
         nameField.requestFocusInWindow();
         refresh();
     }
@@ -168,10 +166,9 @@ public class QueueFrame extends JFrame {
                     "Queue empty", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-        servedModel.add(0, TIME_FORMAT.format(java.time.LocalTime.now()) + "  " + next);
+        servedModel.add(0, TIME_FORMAT.format(LocalTime.now()) + "  " + next);
         JOptionPane.showMessageDialog(this,
-                "Now calling: " + next.getName() + "\nPriority: " + next.getPriority()
-                        + "\nCondition: " + next.getCondition(),
+                "Now calling: " + next.getName() + "\nPriority: " + next.getPriority(),
                 "Next Patient", JOptionPane.INFORMATION_MESSAGE);
         refresh();
     }
@@ -200,10 +197,26 @@ public class QueueFrame extends JFrame {
                 + (next != null ? "   |   Next: " + next.getName() + " (" + next.getPriority() + ")" : ""));
     }
 
+    /** Shows the priority label in bold, in that priority's color. */
+    private static class PriorityRenderer extends DefaultTableCellRenderer {
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
+                                                       boolean hasFocus, int row, int column) {
+            Component cell = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+            cell.setFont(cell.getFont().deriveFont(Font.BOLD));
+            if (!isSelected && value instanceof Priority priority) {
+                cell.setForeground(priority.getColor());
+            } else if (!isSelected) {
+                cell.setForeground(Color.BLACK);
+            }
+            return cell;
+        }
+    }
+
     /** Table model backed by the ordered list of waiting patients. */
     private static class QueueTableModel extends AbstractTableModel {
 
-        private static final String[] COLUMNS = {"Pos", "ID", "Name", "Age", "Condition", "Priority", "Arrived"};
+        private static final String[] COLUMNS = {"Pos", "ID", "Name", "Priority"};
         private List<Patient> patients = List.of();
 
         void setPatients(List<Patient> patients) {
@@ -237,10 +250,7 @@ public class QueueFrame extends JFrame {
                 case 0 -> row + 1;
                 case 1 -> p.getId();
                 case 2 -> p.getName();
-                case 3 -> p.getAge();
-                case 4 -> p.getCondition();
-                case 5 -> p.getPriority();
-                case 6 -> TIME_FORMAT.format(p.getArrivalTime());
+                case 3 -> p.getPriority();
                 default -> "";
             };
         }
