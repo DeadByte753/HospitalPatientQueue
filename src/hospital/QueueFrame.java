@@ -58,8 +58,8 @@ public class QueueFrame extends JFrame {
 
     private final WaitingTableModel waitingModel = new WaitingTableModel();
     private final ServedTableModel servedModel = new ServedTableModel();
-    private final JTable waitingTable = new JTable(waitingModel);
-    private final JTable servedTable = new JTable(servedModel);
+    private final JTable waitingTable = createTable(waitingModel, "No waiting patients");
+    private final JTable servedTable = createTable(servedModel, "No patients served yet");
 
     private JSplitPane splitPane;
     private JButton serveButton;
@@ -170,6 +170,36 @@ public class QueueFrame extends JFrame {
         splitPane.setContinuousLayout(true);
         splitPane.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
         return splitPane;
+    }
+
+    /**
+     * Creates a table that draws {@code placeholder} in its middle whenever it has no rows,
+     * so an empty queue shows a clear message instead of a blank area.
+     */
+    private static JTable createTable(AbstractTableModel model, String placeholder) {
+        return new JTable(model) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                if (getRowCount() > 0) {
+                    return;
+                }
+                Graphics2D g2 = (Graphics2D) g.create();
+                try {
+                    g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
+                            RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+                    g2.setFont(getFont().deriveFont(Font.ITALIC, 14f));
+                    g2.setColor(Color.GRAY);
+                    int textWidth = g2.getFontMetrics().stringWidth(placeholder);
+                    Rectangle visible = getVisibleRect();
+                    g2.drawString(placeholder,
+                            visible.x + (visible.width - textWidth) / 2,
+                            visible.y + visible.height / 2);
+                } finally {
+                    g2.dispose();
+                }
+            }
+        };
     }
 
     /** Shared table setup: single selection, colored priority, centered first column, avatar column. */
@@ -441,7 +471,7 @@ public class QueueFrame extends JFrame {
         Patient next = queue.peek();
         statusLabel.setText(next != null
                 ? "Next: " + next.getName() + " (" + next.getPriority() + ")"
-                : "No patients waiting");
+                : "No waiting patients");
     }
 
     // ------------------------------------------------------- moving patient

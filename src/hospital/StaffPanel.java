@@ -2,15 +2,18 @@ package hospital;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
+import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import java.awt.BasicStroke;
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Polygon;
@@ -23,8 +26,8 @@ import java.awt.geom.RoundRectangle2D;
 import java.util.List;
 
 /**
- * Top panel of the dashboard: one drawn hospital staff character per group member,
- * with the member's full name and role beneath it.
+ * Compact header for the dashboard: the app title on the left and a small badge for
+ * each group member on the right (a drawn staff character, their full name and role).
  */
 public class StaffPanel extends JPanel {
 
@@ -61,49 +64,151 @@ public class StaffPanel extends JPanel {
             new Member("[Member 4 Full Name]", Role.DOCTOR)
     );
 
+    private static final Color HEADER_DARK = new Color(0x0D, 0x47, 0xA1);
+    private static final Color HEADER_LIGHT = new Color(0x19, 0x76, 0xD2);
+    private static final Color SUBTLE_TEXT = new Color(0xBB, 0xDE, 0xFB);
+
+    /** Size of each staff character in the header (the full drawing is 90 x 100). */
+    private static final double FIGURE_SCALE = 0.42;
+
     public StaffPanel(List<Member> members) {
-        setLayout(new FlowLayout(FlowLayout.CENTER, 28, 6));
-        setBorder(BorderFactory.createTitledBorder("Hospital Staff"));
-        setBackground(new Color(0xE3, 0xF2, 0xFD));
-        for (Member member : members) {
-            add(createCard(member));
+        setLayout(new BorderLayout(16, 0));
+        setBorder(BorderFactory.createEmptyBorder(6, 14, 6, 14));
+        add(createTitle(), BorderLayout.WEST);
+
+        // A single right-aligned row. Unlike FlowLayout it never wraps a badge onto a
+        // hidden second line; if space runs out, long names are shortened with "...".
+        JPanel badges = new JPanel();
+        badges.setOpaque(false);
+        badges.setLayout(new BoxLayout(badges, BoxLayout.X_AXIS));
+        badges.add(javax.swing.Box.createHorizontalGlue());
+        for (int i = 0; i < members.size(); i++) {
+            if (i > 0) {
+                badges.add(javax.swing.Box.createHorizontalStrut(8));
+            }
+            badges.add(createBadge(members.get(i)));
+        }
+        add(badges, BorderLayout.CENTER);
+    }
+
+    @Override
+    protected void paintComponent(Graphics g) {
+        Graphics2D g2 = (Graphics2D) g.create();
+        try {
+            g2.setPaint(new GradientPaint(0, 0, HEADER_DARK, getWidth(), 0, HEADER_LIGHT));
+            g2.fillRect(0, 0, getWidth(), getHeight());
+        } finally {
+            g2.dispose();
         }
     }
 
-    private static JPanel createCard(Member member) {
-        JPanel card = new JPanel();
-        card.setOpaque(false);
-        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+    private static JPanel createTitle() {
+        JLabel title = new JLabel("Hospital Patient Queue", new MedicalCrossIcon(), JLabel.LEFT);
+        title.setIconTextGap(10);
+        title.setForeground(Color.WHITE);
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 20f));
 
-        StaffFigure figure = new StaffFigure(member.role());
-        figure.setAlignmentX(Component.CENTER_ALIGNMENT);
+        JLabel subtitle = new JLabel("Priority triage dashboard");
+        subtitle.setForeground(SUBTLE_TEXT);
+        subtitle.setFont(subtitle.getFont().deriveFont(12f));
+        subtitle.setBorder(BorderFactory.createEmptyBorder(0, 42, 0, 0)); // line up under the title text
 
-        JLabel name = new JLabel(member.fullName());
-        name.setFont(name.getFont().deriveFont(Font.BOLD, 13f));
-        name.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        JLabel role = new JLabel(member.role().toString());
-        role.setForeground(Color.DARK_GRAY);
-        role.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        card.add(figure);
-        card.add(name);
-        card.add(role);
-        return card;
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setOpaque(false);
+        panel.add(title, BorderLayout.CENTER);
+        panel.add(subtitle, BorderLayout.SOUTH);
+        return panel;
     }
 
-    /** A simple staff character drawn with Graphics2D shapes. */
+    /** A member badge: small character on the left, name and role on the right. */
+    private static JPanel createBadge(Member member) {
+        JPanel badge = new JPanel(new BorderLayout(6, 0)) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                try {
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    g2.setColor(new Color(255, 255, 255, 34));
+                    g2.fill(new RoundRectangle2D.Double(0, 0, getWidth() - 1, getHeight() - 1, 14, 14));
+                } finally {
+                    g2.dispose();
+                }
+            }
+        };
+        badge.setOpaque(false);
+        badge.setBorder(BorderFactory.createEmptyBorder(3, 4, 3, 8));
+
+        JLabel name = new JLabel(member.fullName());
+        name.setForeground(Color.WHITE);
+        name.setFont(name.getFont().deriveFont(Font.BOLD, 11.5f));
+
+        JLabel role = new JLabel(member.role().toString());
+        role.setForeground(SUBTLE_TEXT);
+        role.setFont(role.getFont().deriveFont(11f));
+
+        JPanel text = new JPanel();
+        text.setOpaque(false);
+        text.setLayout(new BoxLayout(text, BoxLayout.Y_AXIS));
+        text.add(javax.swing.Box.createVerticalGlue());
+        text.add(name);
+        text.add(role);
+        text.add(javax.swing.Box.createVerticalGlue());
+
+        badge.add(new StaffFigure(member.role(), FIGURE_SCALE), BorderLayout.WEST);
+        badge.add(text, BorderLayout.CENTER);
+        badge.setMaximumSize(badge.getPreferredSize()); // keep BoxLayout from stretching the badge
+        return badge;
+    }
+
+    /** White circle with a red medical cross, shown before the title. */
+    private static class MedicalCrossIcon implements Icon {
+        private static final int SIZE = 32;
+
+        @Override
+        public void paintIcon(Component c, Graphics g, int x, int y) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(Color.WHITE);
+                g2.fill(new Ellipse2D.Double(x, y, SIZE, SIZE));
+                g2.setColor(new Color(0xD3, 0x2F, 0x2F));
+                g2.fill(new Rectangle2D.Double(x + 13, y + 7, 6, 18));
+                g2.fill(new Rectangle2D.Double(x + 7, y + 13, 18, 6));
+            } finally {
+                g2.dispose();
+            }
+        }
+
+        @Override
+        public int getIconWidth() {
+            return SIZE;
+        }
+
+        @Override
+        public int getIconHeight() {
+            return SIZE;
+        }
+    }
+
+    /**
+     * A simple staff character drawn with Graphics2D shapes. The drawing is designed
+     * on a 90 x 100 grid and scaled to the requested size.
+     */
     private static class StaffFigure extends JComponent {
 
+        private static final int BASE_WIDTH = 90;
+        private static final int BASE_HEIGHT = 100;
         private static final Color SKIN = new Color(0xF1, 0xC2, 0x7D);
         private static final Color HAIR = new Color(0x4E, 0x34, 0x2E);
         private static final Color OUTLINE = new Color(0x60, 0x60, 0x60);
 
         private final Role role;
+        private final double scale;
 
-        StaffFigure(Role role) {
+        StaffFigure(Role role, double scale) {
             this.role = role;
-            Dimension size = new Dimension(90, 100);
+            this.scale = scale;
+            Dimension size = new Dimension((int) Math.ceil(BASE_WIDTH * scale), (int) Math.ceil(BASE_HEIGHT * scale));
             setPreferredSize(size);
             setMinimumSize(size);
             setMaximumSize(size);
@@ -114,7 +219,8 @@ public class StaffPanel extends JPanel {
             Graphics2D g2 = (Graphics2D) g.create();
             try {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                double cx = getWidth() / 2.0;
+                g2.scale(scale, scale);
+                double cx = BASE_WIDTH / 2.0;
 
                 drawBody(g2, cx);
                 drawHead(g2, cx);
