@@ -1,54 +1,85 @@
 package hospital;
 
-import java.time.LocalDateTime;
+import java.util.Objects;
 
 /**
- * A patient waiting in the queue.
+ * Represents a patient in the hospital queue.
+ *
+ * Patients are identified by their ID and ordered by priority,
+ * with tie-breaking by arrival order.
  */
 public class Patient {
 
-    private final int id;
+    private final String id;
     private final String name;
-    private final int age;
-    private final String condition;
     private final Priority priority;
-    private final LocalDateTime arrivalTime;
 
-    public Patient(int id, String name, int age, String condition, Priority priority) {
+    /**
+     * Arrival order: a monotonically increasing sequence number used for tie-breaking.
+     * When two patients have the same priority level, the one with the lower arrivalOrder
+     * (earlier arrival) is treated first.
+     */
+    private final long arrivalOrder;
+
+    /**
+     * Creates a new patient.
+     *
+     * @param id           unique identifier for this patient
+     * @param name         patient's name
+     * @param priority     triage priority level
+     * @param arrivalOrder sequence number for tie-breaking (lower = arrived earlier)
+     */
+    public Patient(String id, String name, Priority priority, long arrivalOrder) {
         this.id = id;
         this.name = name;
-        this.age = age;
-        this.condition = condition;
         this.priority = priority;
-        this.arrivalTime = LocalDateTime.now();
+        this.arrivalOrder = arrivalOrder;
     }
 
-    public int getId() {
+    /**
+     * Returns the unique identifier for this patient.
+     */
+    public String getId() {
         return id;
     }
 
+    /**
+     * Returns the patient's name.
+     */
     public String getName() {
         return name;
     }
 
-    public int getAge() {
-        return age;
-    }
-
-    public String getCondition() {
-        return condition;
-    }
-
+    /**
+     * Returns the triage priority level.
+     */
     public Priority getPriority() {
         return priority;
     }
 
-    public LocalDateTime getArrivalTime() {
-        return arrivalTime;
+    /**
+     * Returns the arrival order sequence number.
+     * Used for tie-breaking when two patients have the same priority.
+     */
+    public long getArrivalOrder() {
+        return arrivalOrder;
     }
 
     @Override
     public String toString() {
         return "#" + id + " " + name + " (" + priority + ")";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Patient patient = (Patient) o;
+        return Objects.equals(id, patient.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
     }
 }
