@@ -10,6 +10,23 @@ import java.util.Objects;
  */
 public class Patient {
 
+    /** Where the patient is in the visit: waiting in the queue, or already served. */
+    public enum Status {
+        WAITING("Waiting"),
+        SERVED("Served");
+
+        private final String label;
+
+        Status(String label) {
+            this.label = label;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
+    }
+
     private final String id;
     private final String name;
     private final Priority priority;
@@ -20,6 +37,9 @@ public class Patient {
      * (earlier arrival) is treated first.
      */
     private final long arrivalOrder;
+
+    /** Every patient starts as WAITING; PatientQueue.serveNext() changes it to SERVED. */
+    private Status status = Status.WAITING;
 
     /**
      * Creates a new patient.
@@ -63,6 +83,19 @@ public class Patient {
      */
     public long getArrivalOrder() {
         return arrivalOrder;
+    }
+
+    /** Returns whether the patient is waiting or has been served. */
+    public Status getStatus() {
+        return status;
+    }
+
+    /**
+     * Updates the patient's status. Status is not part of equals/hashCode
+     * (those use the id only), so changing it is safe while in a collection.
+     */
+    public void setStatus(Status status) {
+        this.status = status;
     }
 
     @Override

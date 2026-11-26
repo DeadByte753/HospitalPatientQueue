@@ -74,14 +74,17 @@ public class PatientQueue {
     }
 
     /**
-     * Removes the next patient from the waiting queue, records them as served,
-     * and returns them. Returns null if nobody is waiting.
+     * Serves the next patient: poll() removes the highest-priority patient (earliest
+     * arrival on a tie), their status is set to SERVED and they are added to the
+     * served list. Returns null and changes nothing if nobody is waiting.
      */
     public Patient serveNext() {
         Patient next = waiting.poll();
-        if (next != null) {
-            served.add(new ServedPatient(next, LocalTime.now()));
+        if (next == null) {
+            return null;
         }
+        next.setStatus(Patient.Status.SERVED);
+        served.add(new ServedPatient(next, LocalTime.now()));
         return next;
     }
 
@@ -102,7 +105,13 @@ public class PatientQueue {
         return waiting.isEmpty();
     }
 
-    /** Returns the waiting patients in the order they will be served. */
+    /**
+     * Returns the waiting patients in the order they will be served (index 0 is next).
+     *
+     * A PriorityQueue's iterator does NOT return elements in priority order; only
+     * poll()/peek() respect the ordering. So the patients are copied into a list
+     * and sorted with the same comparator the queue uses.
+     */
     public List<Patient> inOrder() {
         List<Patient> list = new ArrayList<>(waiting);
         list.sort(ORDER);

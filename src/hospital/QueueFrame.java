@@ -1,6 +1,7 @@
 package hospital;
 
 import javax.swing.BorderFactory;
+import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
@@ -14,6 +15,7 @@ import javax.swing.ListSelectionModel;
 import javax.swing.border.TitledBorder;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.TableColumnModel;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
@@ -109,14 +111,33 @@ public class QueueFrame extends JFrame {
         configureTable(waitingTable);
         configureTable(servedTable);
 
+        // Taller rows so the avatar fits, and narrow Rank/Status/Avatar columns.
+        waitingTable.setRowHeight(34);
+        TableColumnModel columns = waitingTable.getColumnModel();
+        columns.getColumn(0).setMaxWidth(60);
+        DefaultTableCellRenderer centered = new DefaultTableCellRenderer();
+        centered.setHorizontalAlignment(JLabel.CENTER);
+        columns.getColumn(0).setCellRenderer(centered);
+        columns.getColumn(4).setPreferredWidth(80);
+        columns.getColumn(5).setMaxWidth(70);
+        columns.getColumn(5).setMinWidth(70);
+
         JButton removeButton = new JButton("Remove Selected");
         removeButton.addActionListener(e -> removeSelected());
-        JPanel waitingButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        waitingButtons.add(removeButton);
+
+        JLabel tieBreakNote = new JLabel(
+                "Note: patients with equal priority are served in arrival order (first come, first served).");
+        tieBreakNote.setFont(tieBreakNote.getFont().deriveFont(Font.ITALIC));
+        tieBreakNote.setForeground(Color.DARK_GRAY);
+
+        JPanel waitingFooter = new JPanel(new BorderLayout());
+        waitingFooter.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
+        waitingFooter.add(tieBreakNote, BorderLayout.CENTER);
+        waitingFooter.add(removeButton, BorderLayout.EAST);
 
         JPanel waitingCard = new JPanel(new BorderLayout(4, 4));
         waitingCard.add(new JScrollPane(waitingTable), BorderLayout.CENTER);
-        waitingCard.add(waitingButtons, BorderLayout.SOUTH);
+        waitingCard.add(waitingFooter, BorderLayout.SOUTH);
 
         JPanel servedCard = new JPanel(new BorderLayout());
         servedCard.add(new JScrollPane(servedTable), BorderLayout.CENTER);
@@ -196,7 +217,11 @@ public class QueueFrame extends JFrame {
         centerPanel.repaint();
     }
 
-    /** Serves the highest-priority patient who arrived first and moves them to the served list. */
+    /**
+     * Serves the next patient (highest priority, earliest arrival on a tie): they are
+     * removed from the queue, marked Served and added to the served list, then the
+     * tables and status bar refresh. If nobody is waiting, nothing changes.
+     */
     private void serveNextPatient() {
         Patient next = queue.serveNext();
         if (next == null) {
@@ -315,15 +340,33 @@ public class QueueFrame extends JFrame {
         }
     }
 
-    /** Waiting patients, in the order they will be served. */
+    /**
+     * Waiting patients, in the order they will be served.
+     *
+     * The list given to setPatients must already be sorted (see PatientQueue.inOrder(),
+     * which copies the PriorityQueue into a list and sorts it with the queue's comparator).
+     * Row 0 is therefore Rank 1, the next patient to be served.
+     */
     private static class WaitingTableModel extends AbstractTableModel {
 
-        private static final String[] COLUMNS = {"Pos", "ID", "Name", "Priority"};
+        private static final String[] COLUMNS = {"Rank", "Patient ID", "Name", "Priority", "Status", "Avatar"};
         private List<Patient> patients = List.of();
+        private List<Icon> avatars = List.of();
 
         void setPatients(List<Patient> patients) {
             this.patients = patients;
+            this.avatars = patients.stream().<Icon>map(PatientAvatar::new).toList();
             fireTableDataChanged();
+        }
+
+        @Override
+        public Class<?> getColumnClass(int column) {
+            // Icon.class tells JTable to draw the Avatar column as an image, not as text.
+            return switch (column) {
+                case 0 -> Integer.class;
+                case 5 -> Icon.class;
+                default -> Object.class;
+            };
         }
 
         Patient getPatientAt(int row) {
@@ -349,10 +392,12 @@ public class QueueFrame extends JFrame {
         public Object getValueAt(int row, int column) {
             Patient p = patients.get(row);
             return switch (column) {
-                case 0 -> row + 1;
+                case 0 -> row + 1;                          // Rank 1 = next to be served
                 case 1 -> p.getId();
                 case 2 -> p.getName();
                 case 3 -> p.getPriority();
+                case 4 -> row == 0 ? "Next" : p.getStatus().toString();
+                case 5 -> avatars.get(row);
                 default -> "";
             };
         }
@@ -361,7 +406,7 @@ public class QueueFrame extends JFrame {
     /** Served patients, in the order they were served. */
     private static class ServedTableModel extends AbstractTableModel {
 
-        private static final String[] COLUMNS = {"#", "ID", "Name", "Priority", "Served At"};
+        private static final String[] COLUMNS = {"#", "ID", "Name", "Priority", "Status", "Served At"};
         private List<PatientQueue.ServedPatient> served = List.of();
 
         void setServed(List<PatientQueue.ServedPatient> served) {
@@ -392,7 +437,8 @@ public class QueueFrame extends JFrame {
                 case 1 -> s.patient().getId();
                 case 2 -> s.patient().getName();
                 case 3 -> s.patient().getPriority();
-                case 4 -> TIME_FORMAT.format(s.servedAt());
+                case 4 -> s.patient().getStatus();
+                case 5 -> TIME_FORMAT.format(s.servedAt());
                 default -> "";
             };
         }
