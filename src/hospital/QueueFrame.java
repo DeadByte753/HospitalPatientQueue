@@ -64,6 +64,7 @@ public class QueueFrame extends JFrame {
     private JSplitPane splitPane;
     private JButton serveButton;
     private final JLabel statusLabel = new JLabel();
+    private final StatisticsPanel statisticsPanel = new StatisticsPanel();
 
     /** The running serve animation, or null when none is running. */
     private Timer serveAnimation;
@@ -96,8 +97,13 @@ public class QueueFrame extends JFrame {
 
         add(buildCenterPanel(), BorderLayout.CENTER);
 
+        // Bottom: statistics tiles on the left, "Next / Just served" text beside them.
         statusLabel.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
-        add(statusLabel, BorderLayout.SOUTH);
+        JPanel bottom = new JPanel(new BorderLayout());
+        bottom.setBorder(BorderFactory.createEmptyBorder(0, 4, 4, 4));
+        bottom.add(statisticsPanel, BorderLayout.WEST);
+        bottom.add(statusLabel, BorderLayout.CENTER);
+        add(bottom, BorderLayout.SOUTH);
 
         refresh();
 
@@ -264,8 +270,10 @@ public class QueueFrame extends JFrame {
         // been refreshed yet). This is a lookup by identity, not a re-sort.
         Point from = rowLocationInLayer(waitingTable, waitingModel.rowOf(served));
 
-        // The patient leaves the waiting table as soon as they start moving.
+        // The patient leaves the waiting table as soon as they start moving, and the
+        // statistics update straight away (the served table updates when the card lands).
         waitingModel.setPatients(queue.inOrder());
+        updateStatistics();
 
         // End point: the row the patient will occupy at the bottom of the served table.
         Point to = rowLocationInLayer(servedTable, queue.getServed().size() - 1);
@@ -340,37 +348,46 @@ public class QueueFrame extends JFrame {
             return;
         }
 
-        List<Patient> waitingMatches = queue.searchWaiting(text);
-        List<PatientQueue.ServedPatient> servedMatches = queue.searchServed(text);
-
-        if (waitingMatches.isEmpty() && servedMatches.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "No patient matches \"" + text.trim() + "\".",
-                    "Search Patient", JOptionPane.INFORMATION_MESSAGE);
-            return;
-        }
-
-        StringBuilder message = new StringBuilder();
-        for (Patient p : waitingMatches) {
-            message.append(p.getId()).append("  ").append(p.getName())
-                   .append(" (").append(p.getPriority()).append(")")
-                   .append(" - waiting, rank ").append(queue.positionOf(p)).append('\n');
-        }
-        for (PatientQueue.ServedPatient s : servedMatches) {
-            Patient p = s.patient();
-            message.append(p.getId()).append("  ").append(p.getName())
-                   .append(" (").append(p.getPriority()).append(")")
-                   .append(" - served at ").append(TIME_FORMAT.format(s.servedAt())).append('\n');
-        }
-
         // Highlight the first waiting match in the table.
+        List<Patient> waitingMatches = queue.searchWaiting(text);
         if (!waitingMatches.isEmpty()) {
             int row = queue.positionOf(waitingMatches.get(0)) - 1;
             waitingTable.setRowSelectionInterval(row, row);
             waitingTable.scrollRectToVisible(waitingTable.getCellRect(row, 0, true));
         }
 
-        JOptionPane.showMessageDialog(this, message.toString().trim(),
+        JOptionPane.showMessageDialog(this, formatSearchResults(queue, text),
                 "Search Results", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    /**
+     * Builds the Search Patient result text. Matches an exact patient ID or part of a
+     * name (both case-insensitive) across waiting and served patients. Each match shows
+     * its rank (waiting patients only), priority and status; no match gives "Not found".
+     */
+    static String formatSearchResults(PatientQueue queue, String text) {
+        List<Patient> waitingMatches = queue.searchWaiting(text);
+        List<PatientQueue.ServedPatient> servedMatches = queue.searchServed(text);
+        if (waitingMatches.isEmpty() && servedMatches.isEmpty()) {
+            return "Not found";
+        }
+
+        StringBuilder message = new StringBuilder();
+        for (Patient p : waitingMatches) {
+            message.append(p.getId()).append("  ").append(p.getName()).append('\n')
+                   .append("    Rank: ").append(queue.positionOf(p))
+                   .append("    Priority: ").append(p.getPriority())
+                   .append("    Status: ").append(p.getStatus()).append("\n\n");
+        }
+        for (PatientQueue.ServedPatient s : servedMatches) {
+            Patient p = s.patient();
+            message.append(p.getId()).append("  ").append(p.getName()).append('\n')
+                   .append("    Rank: -")
+                   .append("    Priority: ").append(p.getPriority())
+                   .append("    Status: ").append(p.getStatus())
+                   .append(" at ").append(TIME_FORMAT.format(s.servedAt())).append("\n\n");
+        }
+        return message.toString().trim();
     }
 
     /** Gives the served panel most of the width and scrolls to the most recently served patient. */
@@ -411,14 +428,20 @@ public class QueueFrame extends JFrame {
         }
     }
 
-    /** Reloads both tables and the status bar from the queue. */
+    /** Reloads both tables, the statistics and the status text from the queue. */
     private void refresh() {
         waitingModel.setPatients(queue.inOrder());
         servedModel.setServed(queue.getServed());
+        updateStatistics();
+    }
+
+    /** Updates the statistics tiles and the "Next" text. Called after every action that changes the queue. */
+    private void updateStatistics() {
+        statisticsPanel.update(queue.size(), queue.getServed().size());
         Patient next = queue.peek();
-        statusLabel.setText("Waiting: " + queue.size()
-                + "   |   Served: " + queue.getServed().size()
-                + (next != null ? "   |   Next: " + next.getName() + " (" + next.getPriority() + ")" : ""));
+        statusLabel.setText(next != null
+                ? "Next: " + next.getName() + " (" + next.getPriority() + ")"
+                : "No patients waiting");
     }
 
     // ------------------------------------------------------- moving patient
